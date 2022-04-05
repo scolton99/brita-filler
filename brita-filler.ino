@@ -187,8 +187,12 @@ void update_state(state_t* state) {
   if (state->current_pour != NULL) {
     pour_t* pour = state->current_pour;
 
-    // If we have been pouring for more than 30 seconds, regardless of initiator
+    // If we have been pouring for more than the lockout time,
+    // regardless of initiator, we need to lock out
     if ((current_time - pour->lockout_start) >= LOCKOUT_TIME_MS) {
+      pour->start         = 0UL;
+      pour->lockout_start = 0UL;
+      pour->manual        = false;
       state->lockout      = true;
       state->current_pour = NULL;
       state->count        = 0;
@@ -210,18 +214,18 @@ void update_state(state_t* state) {
       update_auto_pour(state);
 
       if (state->count >= CONSECUTIVE) {
-        // If we've had 10 or more sensor reads 
+        // If we've had enough consecutive sensor reads 
         // indicating no water
         pour->manual = false;
 
         // Update start time for hysteresis
         // DO NOT update lockout time to ensure
-        // we do not pour longer than 30 seconds
+        // we do not pour longer than the lockout time
         pour->start  = current_time;
       } else {
         // We are now detecting water
         if ((current_time - pour->start) >= HYSTERESIS_TIME_MS) {
-          // If we have been pouring for more than 10 seconds 
+          // If we have been pouring for more than the hystersis time
           // past the last "no water" signal, stop
           pour->start         = 0UL;
           pour->manual        = false;
@@ -240,7 +244,7 @@ void update_state(state_t* state) {
       // Use same lockout and start values because
       // manual pours have no hysteresis
       current_pour->lockout_start = current_time;
-      current_pour->start         = current_pour->lockout_start;
+      current_pour->start         = current_time;
 
       // Reset count so that letting go of the button 
       // stops the pour (at least for a bit)
@@ -252,8 +256,9 @@ void update_state(state_t* state) {
       // Check sensor value and update state
       update_auto_pour(state);
       
+      // If we have detected no water enough times
+      // in a row
       if (state->count >= CONSECUTIVE) {
-        // We have detected no water 10+ times
         // This is an auto situation
         current_pour->manual = false;
 
