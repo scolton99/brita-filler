@@ -309,6 +309,8 @@ void print_state(const state_t* state) {
 
     Serial.print("    \"lockout_start\": ");
     Serial.println(pour->lockout_start);
+
+    Serial.println("  }");
   }
 
   Serial.println("}");
