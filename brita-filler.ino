@@ -11,7 +11,7 @@ const char ENABLE = 3;
 const char MANUAL = 2;
 
 /// How often to poll water levels
-const int  UPDATE_FREQ_MS     = 500;
+const int  UPDATE_FREQ_MS     = 1000;
 
 /**
  * The raw threshold to consider water to be present.
@@ -27,7 +27,7 @@ const int  THRESHOLD          = 900;
  * milliseconds apart that must be less than or equal to 
  * THRESHOLD before the valve will be opened.
  */
-const int  CONSECUTIVE        = 10;
+const int  CONSECUTIVE        = 5;
 
 /**
  * The maximum length of any kind of pour before the
@@ -93,6 +93,9 @@ typedef struct State {
    * Maxes out at CONSECUTIVE; does not grow without bound.
    */
   unsigned char count;
+
+  /// The last raw sensor reading
+  int           last_raw_reading;
 } state_t;
 
 /// Initial state of current pour
@@ -149,6 +152,7 @@ int raw_sense() {
  */
 bool update_auto_pour(state_t* state) {
   int current_sense = raw_sense();
+  state->last_raw_reading = current_sense;
 
   if (current_sense <= THRESHOLD && state->count < CONSECUTIVE)
     state->count++;
@@ -210,9 +214,6 @@ void update_state(state_t* state) {
       state->count = 0;
       return;
     } else {
-      // Check sensor value and update state
-      update_auto_pour(state);
-
       if (state->count >= CONSECUTIVE) {
         // If we've had enough consecutive sensor reads 
         // indicating no water
@@ -223,28 +224,40 @@ void update_state(state_t* state) {
         // we do not pour longer than the lockout time
         pour->start  = current_time;
       } else {
-        // We are now detecting water
-        if ((current_time - pour->start) >= HYSTERESIS_TIME_MS) {
-          // If we have been pouring for more than the hystersis time
-          // past the last "no water" signal, stop
-          pour->start         = 0UL;
+        // If we were pouring because the button was pressed
+        if (pour->manual) {
+          // Stop, because the button isn't pressed anymore
           pour->manual        = false;
+          pour->start         = 0UL;
           pour->lockout_start = 0UL;
           state->current_pour = NULL;
+        } else {
+          // We were pouring automatically, but the 
+          // conditions aren't right anymore.
+          // We are now detecting water
+          if ((current_time - pour->start) >= HYSTERESIS_TIME_MS) {
+            // If we have been pouring for more than the hystersis time
+            // past the last "no water" signal, stop
+            pour->start         = 0UL;
+            pour->manual        = false;
+            pour->lockout_start = 0UL;
+            state->current_pour = NULL;
+          }
+          // Otherwise, keep pouring, no change
+          // Keep pouring until hysteresis time met
         }
-        // Otherwise, keep pouring, no change
       }
     }
   } else {
     // We are not currently pouring
     if (is_manual()) {
       // If the manual button is being pushed
-      current_pour->manual        = true;
+      current_pour.manual        = true;
 
       // Use same lockout and start values because
       // manual pours have no hysteresis
-      current_pour->lockout_start = current_time;
-      current_pour->start         = current_time;
+      current_pour.lockout_start = current_time;
+      current_pour.start         = current_time;
 
       // Reset count so that letting go of the button 
       // stops the pour (at least for a bit)
@@ -252,19 +265,16 @@ void update_state(state_t* state) {
 
       // Start the pour
       state->current_pour = &current_pour;
-    } else {
-      // Check sensor value and update state
-      update_auto_pour(state);
-      
+    } else {      
       // If we have detected no water enough times
       // in a row
       if (state->count >= CONSECUTIVE) {
         // This is an auto situation
-        current_pour->manual = false;
+        current_pour.manual = false;
 
         // Set times for hystersis/lockout
-        current_pour->start         = current_time;
-        current_pour->lockout_start = current_time;
+        current_pour.start         = current_time;
+        current_pour.lockout_start = current_time;
 
         // Start the pour
         state->current_pour = &current_pour;
@@ -287,27 +297,31 @@ void print_state(const state_t* state) {
 
   Serial.println("{");
 
-  Serial.print("  \"count\": ");
+  Serial.print("\t\"count\": ");
   Serial.print(state->count);
   Serial.println(",");
 
-  Serial.print("  \"lockout\": ");
+  Serial.print("\t\"lockout\": ");
   Serial.println(state->lockout ? "true," : "false,");
 
-  Serial.print("  \"current_pour\": ");
-  Serial.print(state->current_pour == NULL ? "null" : "{");
+  Serial.print("\t\"last_raw_reading\": ");
+  Serial.print(state->last_raw_reading);
+  Serial.println(",");
+
+  Serial.print("\t\"current_pour\": ");
+  Serial.println(state->current_pour == NULL ? "null" : "{");
 
   if (state->current_pour != NULL) {
     pour_t* pour = state->current_pour;
 
-    Serial.print("    \"manual\": ");
+    Serial.print("\t\"manual\": ");
     Serial.println(pour->manual ? "true," : "false,");
 
-    Serial.print("    \"start\": ");
+    Serial.print("\t\"start\": ");
     Serial.print(pour->start);
     Serial.println(",");
 
-    Serial.print("    \"lockout_start\": ");
+    Serial.print("\t\"lockout_start\": ");
     Serial.println(pour->lockout_start);
 
     Serial.println("  }");
@@ -325,6 +339,8 @@ void refresh() {
 
 /// Polling interval
 void loop() {
+  // Check sensor value and update state
+  update_auto_pour(&program_state);
   refresh();
   print_state(&program_state);
   delay(UPDATE_FREQ_MS);
