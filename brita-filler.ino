@@ -193,7 +193,7 @@ void update_state(state_t* state) {
 
     // If we have been pouring for more than the lockout time,
     // regardless of initiator, we need to lock out
-    if ((current_time - pour->lockout_start) >= LOCKOUT_TIME_MS) {
+    if ((current_time < pour->lockout_start) || (current_time - pour->lockout_start) >= LOCKOUT_TIME_MS) {
       pour->start         = 0UL;
       pour->lockout_start = 0UL;
       pour->manual        = false;
@@ -235,7 +235,7 @@ void update_state(state_t* state) {
           // We were pouring automatically, but the 
           // conditions aren't right anymore.
           // We are now detecting water
-          if ((current_time - pour->start) >= HYSTERESIS_TIME_MS) {
+          if ((current_time < pour->start) || (current_time - pour->start) >= HYSTERESIS_TIME_MS) {
             // If we have been pouring for more than the hystersis time
             // past the last "no water" signal, stop
             pour->start         = 0UL;
