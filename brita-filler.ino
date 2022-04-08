@@ -15,12 +15,12 @@ const int  UPDATE_FREQ_MS     = 1000;
 
 /**
  * The raw threshold to consider water to be present.
- * Recommend keeping this value at its default (900).
+ * This will need to be finely tuned to the installation.
  *
  * Ranges from 0 to 1023. As per 
  * https://www.arduino.cc/en/Reference/AnalogRead.
  */
-const int  THRESHOLD          = 900;
+const int  THRESHOLD          = 200;
 
 /**
  * The number of consecutive readings spaced UPDATE_FREQ_MS
@@ -34,7 +34,7 @@ const int  CONSECUTIVE        = 5;
  * system will assume a problem and shut off to avoid
  * flooding.
  */
-const int  LOCKOUT_TIME_MS    = 30000;
+const int  LOCKOUT_TIME_MS    = 25000;
 
 /**
  * Time to wait after an automatic pour has begun 
@@ -44,7 +44,7 @@ const int  LOCKOUT_TIME_MS    = 30000;
  * the level of the water probe so that it is not 
  * trying to maintain one specific water level.
  */
-const int  HYSTERESIS_TIME_MS = 10000;
+const int  HYSTERESIS_TIME_MS = 15000;
 
 /**
  * Piece of application state representing the 
